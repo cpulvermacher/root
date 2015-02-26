@@ -77,6 +77,7 @@
 #include <cmath>
 #include <assert.h>
 #include <vector>
+#include <memory>
 
 #include "TListOfDataMembers.h"
 #include "TListOfFunctions.h"
@@ -108,7 +109,13 @@ std::atomic<Int_t> TClass::fgClassCount;
 // Implementation of the TDeclNameRegistry
 
 //______________________________________________________________________________
-TClass::TDeclNameRegistry::TDeclNameRegistry(Int_t verbLevel): fVerbLevel(verbLevel){}
+TClass::TDeclNameRegistry::TDeclNameRegistry(Int_t verbLevel): fVerbLevel(verbLevel)
+{
+   // TDeclNameRegistry class constructor.
+
+   // MSVC doesn't support fSpinLock=ATOMIC_FLAG_INIT; in the class definition
+   std::atomic_flag_clear( &fSpinLock );
+}
 
 //______________________________________________________________________________
 void TClass::TDeclNameRegistry::AddQualifiedName(const char *name)
@@ -1551,8 +1558,8 @@ TClass::~TClass()
    delete fFuncTemplate; fFuncTemplate = 0;
 
    if (fMethod)
-      fMethod->Delete();
-   delete fMethod;   fMethod=0;
+      (*fMethod).Delete();
+   delete fMethod.load();   fMethod=0;
 
    if (fRealData)
       fRealData->Delete();
@@ -2036,11 +2043,11 @@ void TClass::CalculateStreamerOffset() const
       // gets allocated on the heap and not in the mapped file.
 
       TMmallocDescTemp setreset;
-      fIsOffsetStreamerSet = kTRUE;
       fOffsetStreamer = const_cast<TClass*>(this)->GetBaseClassOffsetRecurse(TObject::Class());
       if (fStreamerType == kTObject) {
          fStreamerImpl = &TClass::StreamerTObjectInitialized;
       }
+      fIsOffsetStreamerSet = kTRUE;
    }
 }
 
@@ -3284,13 +3291,22 @@ TList *TClass::GetListOfBases()
    if (!fBase) {
       if (fCanLoadClassInfo) {
          if (fState == kHasTClassInit) {
+
+            R__LOCKGUARD(gInterpreterMutex);
+            // NOTE: Add test to prevent redo if another thread has already done the work.
+            // if (!fHasRootPcmInfo) {
+
             // The bases are in our ProtoClass; we don't need the class info.
             TProtoClass *proto = TClassTable::GetProtoNorm(GetName());
             if (proto && proto->FillTClass(this)) {
+               // Not sure this code is still needed
+               // R__ASSERT(kFALSE);
+
                fHasRootPcmInfo = kTRUE;
             }
          }
-         if (!fHasRootPcmInfo) {
+         // We test again on fCanLoadClassInfo has another thread may have executed it.
+         if (!fHasRootPcmInfo && !fCanLoadClassInfo) {
             LoadClassInfo();
          }
       }
@@ -3328,9 +3344,15 @@ TList *TClass::GetListOfDataMembers(Bool_t load /* = kTRUE */)
 
    if (!fData) {
       if (fCanLoadClassInfo && fState == kHasTClassInit) {
+         // NOTE: Add test to prevent redo if another thread has already done the work.
+         // if (!fHasRootPcmInfo) {
+
          // The members are in our ProtoClass; we don't need the class info.
          TProtoClass *proto = TClassTable::GetProtoNorm(GetName());
          if (proto && proto->FillTClass(this)) {
+            // Not sure this code is still needed
+            // R__ASSERT(kFALSE);
+
             fHasRootPcmInfo = kTRUE;
             return fData;
          }
@@ -3369,10 +3391,10 @@ TList *TClass::GetListOfMethods(Bool_t load /* = kTRUE */)
 
    R__LOCKGUARD(gInterpreterMutex);
 
-   if (!fMethod) fMethod = new TListOfFunctions(this);
+   if (!fMethod) GetMethodList();
    if (load) {
       if (gDebug>0) Info("GetListOfMethods","Header Parsing - Asking for all the methods of class %s: this can involve parsing.",GetName());
-      fMethod->Load();
+      (*fMethod).Load();
    }
    return fMethod;
 }
@@ -3381,7 +3403,7 @@ TList *TClass::GetListOfMethods(Bool_t load /* = kTRUE */)
 TCollection *TClass::GetListOfMethodOverloads(const char* name) const
 {
    // Return the collection of functions named "name".
-   return ((TListOfFunctions*)fMethod)->GetListForObject(name);
+   return const_cast<TClass*>(this)->GetMethodList()->GetListForObject(name);
 }
 
 
@@ -3735,7 +3757,7 @@ void TClass::ResetCaches()
    if (fEnums)
       fEnums->Unload();
    if (fMethod)
-      fMethod->Unload();
+      (*fMethod).Unload();
 
    delete fAllPubData; fAllPubData = 0;
 
@@ -3864,7 +3886,13 @@ TListOfFunctions *TClass::GetMethodList()
    // the internal type of fMethod and thus can not be made public.
    // It also never 'loads' the content of the list.
 
-   if (!fMethod) fMethod = new TListOfFunctions(this);
+   if (!fMethod) {
+      std::unique_ptr<TListOfFunctions> temp{ new TListOfFunctions(this) };
+      TListOfFunctions* expected = nullptr;
+      if(fMethod.compare_exchange_strong(expected, temp.get()) ) {
+         temp.release();
+      }
+   }
    return fMethod;
 }
 
@@ -3878,7 +3906,7 @@ TMethod *TClass::GetMethodAny(const char *method)
    // of the class.
 
    if (!HasInterpreterInfo()) return 0;
-   return (TMethod*) GetListOfMethods()->FindObject(method);
+   return (TMethod*) GetMethodList()->FindObject(method);
 }
 
 //______________________________________________________________________________
@@ -5212,9 +5240,11 @@ void TClass::LoadClassInfo() const
    // Try to load the classInfo (it may require parsing the header file
    // and/or loading data from the clang pcm).
 
-   R__ASSERT(fCanLoadClassInfo);
-
    R__LOCKGUARD(gInterpreterMutex);
+
+   // If another thread executed LoadClassInfo at about the same time
+   // as this thread return early since the work was done.
+   if (!fCanLoadClassInfo) return;
 
    gInterpreter->AutoParse(GetName());
    if (!fClassInfo) gInterpreter->SetClassInfo(const_cast<TClass*>(this));   // sets fClassInfo pointer
@@ -5458,10 +5488,10 @@ Long_t TClass::Property() const
          kl->fStreamerType  = kExternal;
          kl->fStreamerImpl  = &TClass::StreamerExternal;
       }
-      //must set this last since other threads may read fProperty
-      // and think all test bits have been properly set
-      kl->fProperty = gCling->ClassInfo_Property(fClassInfo);
       kl->fClassProperty = gCling->ClassInfo_ClassProperty(GetClassInfo());
+      // Must set this last since other threads may read fProperty
+      // and think all test bits have been properly set.
+      kl->fProperty = gCling->ClassInfo_Property(fClassInfo);
 
    } else {
 
@@ -5472,6 +5502,8 @@ Long_t TClass::Property() const
 
       kl->fStreamerType |= kEmulatedStreamer;
       kl->SetStreamerImpl();
+      // fProperty was *not* set so that it can be forced to be recalculated
+      // next time.
       return 0;
    }
 
@@ -5606,7 +5638,7 @@ void TClass::SetUnloaded()
    fTypeInfo     = 0;
 
    if (fMethod) {
-      fMethod->Unload();
+      (*fMethod).Unload();
    }
    if (fData) {
       fData->Unload();

@@ -6,15 +6,11 @@
 // LICENSE.TXT for details.
 //------------------------------------------------------------------------------
 
-// RUN: %cling %s | FileCheck %s
-extern "C" int printf(const char* fmt, ...);
-#define MYMACRO(v) \
-   if (v) { \
-      printf("string:%s\n", v);\
-   }
+// RUN: cat %s | %cling -x c | FileCheck %s
 
-void cppmacros() {
-   MYMACRO("PARAM"); // CHECK: string:PARAM
-}
+// Validate cling C mode.
 
-#pragma clang diagnostic ignored "-Wkeyword-compat" // ROOT-6531
+int printf(const char*,...);
+printf("CHECK 123\n"); // CHECK: CHECK 123
+
+// fix value printing!
