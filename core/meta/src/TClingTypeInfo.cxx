@@ -28,6 +28,8 @@
 #include "Rtypes.h" // for gDebug
 #include "TClassEdit.h"
 #include "TMetaUtils.h"
+#include "TInterpreter.h"
+
 #include "cling/Interpreter/Interpreter.h"
 #include "cling/Interpreter/LookupHelper.h"
 #include "cling/Utils/AST.h"
@@ -103,9 +105,10 @@ const char *TClingTypeInfo::Name() const
       return "";
    }
    // Note: This *must* be static because we are returning a pointer inside it!
-   static std::string buf;
+   thread_local std::string buf;
    buf.clear();
 
+   R__LOCKGUARD(gInterpreterMutex);
    ROOT::TMetaUtils::GetFullyQualifiedTypeName(buf,fQualType,*fInterp);
    return buf.c_str();
 }
@@ -276,7 +279,7 @@ const char *TClingTypeInfo::StemName() const
       break;
    }
    // Note: This *must* be static because we are returning a pointer inside it.
-   static std::string buf;
+   thread_local std::string buf;
    buf.clear();
    clang::PrintingPolicy Policy(fInterp->getCI()->getASTContext().
                                 getPrintingPolicy());
@@ -294,7 +297,7 @@ const char *TClingTypeInfo::TrueName(const ROOT::TMetaUtils::TNormalizedCtxt &no
       return 0;
    }
    // Note: This *must* be static because we are returning a pointer inside it.
-   static std::string buf;
+   thread_local std::string buf;
    buf.clear();
 
    ROOT::TMetaUtils::GetNormalizedName(buf,fQualType, *fInterp, normCtxt);

@@ -26,6 +26,8 @@
 #include "TProtoClass.h"
 #include "TROOT.h"
 
+#include "TListOfEnums.h"
+
 ClassImp(TEnum)
 
 //______________________________________________________________________________
@@ -150,8 +152,8 @@ TEnum *TEnum::GetEnum(const char *enumName, ESearchAction sa)
       if (sa_local & kInterpLookup) {
          obj = l->FindObject(enName);
       } else {
-         auto enumTable = dynamic_cast<const THashList *>(l);
-         obj = enumTable->THashList::FindObject(enName);
+         auto enumTable = dynamic_cast<const TListOfEnums *>(l);
+         obj = enumTable->GetObject(enName);
       }
       return static_cast<TEnum *>(obj);
    };
@@ -168,6 +170,9 @@ TEnum *TEnum::GetEnum(const char *enumName, ESearchAction sa)
          return en;
       }
 
+      // Lock need for gROOT->GetListOfClasses() and the later update/modification to
+      // the autoparsing state.
+      R__LOCKGUARD(gInterpreterMutex);
       if (auto tClassScope = static_cast<TClass *>(gROOT->GetListOfClasses()->FindObject(scopeName))) {
          // If this is a class, load only if the user allowed interpreter lookup
          // If this is a namespace and the user did not allow for interpreter lookup, load but before disable
@@ -198,12 +203,13 @@ TEnum *TEnum::GetEnum(const char *enumName, ESearchAction sa)
       return theEnum;
    };
 
-   const auto lastPos = strrchr(enumName, ':');
-   if (lastPos != nullptr) {
+   const char *lastPos = TClassEdit::GetUnqualifiedName(enumName);
+
+   if (lastPos != enumName) {
       // We have a scope
-      // All of this C gymnastic is to avoid allocations on the heap
-      const auto enName = lastPos + 1;
-      const auto scopeNameSize = ((Long64_t)lastPos - (Long64_t)enumName) / sizeof(decltype(*lastPos)) - 1;
+      // All of this C gymnastic is to avoid allocations on the heap (see TClingLookupHelper__ExistingTypeCheck)
+      const auto enName = lastPos;
+      const auto scopeNameSize = ((Long64_t)lastPos - (Long64_t)enumName) / sizeof(decltype(*lastPos)) - 2;
       char scopeName[scopeNameSize + 1]; // on the stack, +1 for the terminating character '\0'
       strncpy(scopeName, enumName, scopeNameSize);
       scopeName[scopeNameSize] = '\0';
@@ -217,7 +223,7 @@ TEnum *TEnum::GetEnum(const char *enumName, ESearchAction sa)
          }
          theEnum = searchEnum(scopeName, enName, kAutoload);
       }
-      if (!theEnum && (sa == kALoadAndInterpLookup)) {
+      if (!theEnum && (sa & kALoadAndInterpLookup)) {
          if (gDebug > 0) {
             printf("TEnum::GetEnum: Header Parsing - The enumerator %s is not known to the typesystem: an interpreter lookup will be performed. This can imply parsing of headers. This can be avoided selecting the numerator in the linkdef/selection file.\n", enumName);
          }
@@ -226,7 +232,7 @@ TEnum *TEnum::GetEnum(const char *enumName, ESearchAction sa)
    } else {
       // We don't have any scope: this is a global enum
       theEnum = findEnumInList(gROOT->GetListOfEnums(), enumName, kNone);
-      if (!theEnum && (sa == kAutoload)) {
+      if (!theEnum && (sa & kAutoload)) {
          gInterpreter->AutoLoad(enumName);
          theEnum = findEnumInList(gROOT->GetListOfEnums(), enumName, kAutoload);
       }

@@ -148,6 +148,14 @@ TFormula::TFormula(): TNamed()
    fOptimal        = (TFormulaPrimitive::TFuncG)&TFormula::EvalParOld;
 }
 
+//______________________________________________________________________________
+static bool IsReservedName(const char* name){
+   if (strlen(name)!=1) return false;
+   for (auto const & specialName : {"x","y","z","t"}){
+      if (strcmp(name,specialName)==0) return true;
+   }
+   return false;
+}
 
 //______________________________________________________________________________
 TFormula::TFormula(const char *name,const char *expression) :
@@ -247,8 +255,7 @@ TFormula::TFormula(const char *name,const char *expression) :
    // Store formula in linked list of formula in ROOT
 
 
-   if (strcmp(name,"x")==0 || strcmp(name,"y")==0 ||
-       strcmp(name,"z")==0 || strcmp(name,"t")==0 )
+   if (IsReservedName(name))
    {
       Error("TFormula","The name \'%s\' is reserved as a TFormula variable name.\n"
          "\tThis function will not be registered in the list of functions",name);
@@ -3344,6 +3351,28 @@ void TFormula::ProcessLinear(TString &formula)
    oa->Delete();
 }
 
+//______________________________________________________________________________
+void TFormula::SetName(const char* name)
+{
+   // Set the name of the formula. We need to allow the list of function to
+   // properly handle the hashes.
+   if (IsReservedName(name)) {
+      Error("SetName","The name \'%s\' is reserved as a TFormula variable name.\n"
+         "\tThis function will not be renamed.",name);
+   } else {
+      // Here we need to remove and re-add to keep the hashes consistent with
+      // the underlying names.
+      auto listOfFunctions = gROOT->GetListOfFunctions();
+      TObject* thisAsFunctionInList = nullptr;
+      R__LOCKGUARD2(gROOTMutex);
+      if (listOfFunctions){
+         thisAsFunctionInList = listOfFunctions->FindObject(this);
+         if (thisAsFunctionInList) listOfFunctions->Remove(thisAsFunctionInList);
+      }
+      TNamed::SetName(name);
+      if (thisAsFunctionInList) listOfFunctions->Add(thisAsFunctionInList);
+   }
+}
 
 //______________________________________________________________________________
 void TFormula::SetParameter(const char *name, Double_t value)

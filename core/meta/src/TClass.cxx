@@ -83,6 +83,7 @@
 #include "TListOfFunctions.h"
 #include "TListOfFunctionTemplates.h"
 #include "TListOfEnums.h"
+#include "TListOfEnumsWithLock.h"
 #include "TViewPubDataMembers.h"
 #include "TViewPubFunctions.h"
 
@@ -995,7 +996,7 @@ TClass::TClass() :
    fTypeInfo(0), fShowMembers(0),
    fStreamer(0), fIsA(0), fGlobalIsA(0), fIsAMethod(0),
    fMerge(0), fResetAfterMerge(0), fNew(0), fNewArray(0), fDelete(0), fDeleteArray(0),
-   fDestructor(0), fDirAutoAdd(0), fStreamerFunc(0), fSizeof(-1),
+   fDestructor(0), fDirAutoAdd(0), fStreamerFunc(0), fConvStreamerFunc(0), fSizeof(-1),
    fCanSplit(-1), fProperty(0), fClassProperty(0), fHasRootPcmInfo(kFALSE), fCanLoadClassInfo(kFALSE),
    fIsOffsetStreamerSet(kFALSE), fVersionUsed(kFALSE), fOffsetStreamer(0), fStreamerType(TClass::kDefault),
    fState(kNoInfo),
@@ -1022,7 +1023,7 @@ TClass::TClass(const char *name, Bool_t silent) :
    fTypeInfo(0), fShowMembers(0),
    fStreamer(0), fIsA(0), fGlobalIsA(0), fIsAMethod(0),
    fMerge(0), fResetAfterMerge(0), fNew(0), fNewArray(0), fDelete(0), fDeleteArray(0),
-   fDestructor(0), fDirAutoAdd(0), fStreamerFunc(0), fSizeof(-1),
+   fDestructor(0), fDirAutoAdd(0), fStreamerFunc(0), fConvStreamerFunc(0), fSizeof(-1),
    fCanSplit(-1), fProperty(0), fClassProperty(0), fHasRootPcmInfo(kFALSE), fCanLoadClassInfo(kFALSE),
    fIsOffsetStreamerSet(kFALSE), fVersionUsed(kFALSE), fOffsetStreamer(0), fStreamerType(TClass::kDefault),
    fState(kNoInfo),
@@ -1069,7 +1070,7 @@ TClass::TClass(const char *name, Version_t cversion, Bool_t silent) :
    fTypeInfo(0), fShowMembers(0),
    fStreamer(0), fIsA(0), fGlobalIsA(0), fIsAMethod(0),
    fMerge(0), fResetAfterMerge(0), fNew(0), fNewArray(0), fDelete(0), fDeleteArray(0),
-   fDestructor(0), fDirAutoAdd(0), fStreamerFunc(0), fSizeof(-1),
+   fDestructor(0), fDirAutoAdd(0), fStreamerFunc(0), fConvStreamerFunc(0), fSizeof(-1),
    fCanSplit(-1), fProperty(0), fClassProperty(0), fHasRootPcmInfo(kFALSE), fCanLoadClassInfo(kFALSE),
    fIsOffsetStreamerSet(kFALSE), fVersionUsed(kFALSE), fOffsetStreamer(0), fStreamerType(TClass::kDefault),
    fState(kNoInfo),
@@ -1095,7 +1096,7 @@ TClass::TClass(const char *name, Version_t cversion, EState theState, Bool_t sil
    fTypeInfo(0), fShowMembers(0),
    fStreamer(0), fIsA(0), fGlobalIsA(0), fIsAMethod(0),
    fMerge(0), fResetAfterMerge(0), fNew(0), fNewArray(0), fDelete(0), fDeleteArray(0),
-   fDestructor(0), fDirAutoAdd(0), fStreamerFunc(0), fSizeof(-1),
+   fDestructor(0), fDirAutoAdd(0), fStreamerFunc(0), fConvStreamerFunc(0), fSizeof(-1),
    fCanSplit(-1), fProperty(0), fClassProperty(0), fHasRootPcmInfo(kFALSE), fCanLoadClassInfo(kFALSE),
    fIsOffsetStreamerSet(kFALSE), fVersionUsed(kFALSE), fOffsetStreamer(0), fStreamerType(TClass::kDefault),
    fState(theState),
@@ -1132,7 +1133,7 @@ TClass::TClass(ClassInfo_t *classInfo, Version_t cversion,
    fTypeInfo(0), fShowMembers(0),
    fStreamer(0), fIsA(0), fGlobalIsA(0), fIsAMethod(0),
    fMerge(0), fResetAfterMerge(0), fNew(0), fNewArray(0), fDelete(0), fDeleteArray(0),
-   fDestructor(0), fDirAutoAdd(0), fStreamerFunc(0), fSizeof(-1),
+   fDestructor(0), fDirAutoAdd(0), fStreamerFunc(0), fConvStreamerFunc(0), fSizeof(-1),
    fCanSplit(-1), fProperty(0), fClassProperty(0), fHasRootPcmInfo(kFALSE), fCanLoadClassInfo(kFALSE),
    fIsOffsetStreamerSet(kFALSE), fVersionUsed(kFALSE), fOffsetStreamer(0), fStreamerType(TClass::kDefault),
    fState(kNoInfo),
@@ -1188,7 +1189,7 @@ TClass::TClass(const char *name, Version_t cversion,
    fTypeInfo(0), fShowMembers(0),
    fStreamer(0), fIsA(0), fGlobalIsA(0), fIsAMethod(0),
    fMerge(0), fResetAfterMerge(0), fNew(0), fNewArray(0), fDelete(0), fDeleteArray(0),
-   fDestructor(0), fDirAutoAdd(0), fStreamerFunc(0), fSizeof(-1),
+   fDestructor(0), fDirAutoAdd(0), fStreamerFunc(0), fConvStreamerFunc(0), fSizeof(-1),
    fCanSplit(-1), fProperty(0), fClassProperty(0), fHasRootPcmInfo(kFALSE), fCanLoadClassInfo(kFALSE),
    fIsOffsetStreamerSet(kFALSE), fVersionUsed(kFALSE), fOffsetStreamer(0), fStreamerType(TClass::kDefault),
    fState(kNoInfo),
@@ -1218,7 +1219,7 @@ TClass::TClass(const char *name, Version_t cversion,
    fTypeInfo(0), fShowMembers(0),
    fStreamer(0), fIsA(0), fGlobalIsA(0), fIsAMethod(0),
    fMerge(0), fResetAfterMerge(0), fNew(0), fNewArray(0), fDelete(0), fDeleteArray(0),
-   fDestructor(0), fDirAutoAdd(0), fStreamerFunc(0), fSizeof(-1),
+   fDestructor(0), fDirAutoAdd(0), fStreamerFunc(0), fConvStreamerFunc(0), fSizeof(-1),
    fCanSplit(-1), fProperty(0), fClassProperty(0), fHasRootPcmInfo(kFALSE), fCanLoadClassInfo(kFALSE),
    fIsOffsetStreamerSet(kFALSE), fVersionUsed(kFALSE), fOffsetStreamer(0), fStreamerType(TClass::kDefault),
    fState(kHasTClassInit),
@@ -1544,8 +1545,8 @@ TClass::~TClass()
    delete fData;   fData = 0;
 
    if (fEnums)
-      fEnums->Delete();
-   delete fEnums; fEnums = 0;
+      (*fEnums).Delete();
+   delete fEnums.load(); fEnums = 0;
 
    if (fFuncTemplate)
       fFuncTemplate->Delete();
@@ -2243,6 +2244,7 @@ TObject *TClass::Clone(const char *new_name) const
    copy->SetDestructor(fDestructor);
    copy->SetDirectoryAutoAdd(fDirAutoAdd);
    copy->fStreamerFunc = fStreamerFunc;
+   copy->fConvStreamerFunc = fConvStreamerFunc;
    if (fStreamer) {
       copy->AdoptStreamer(fStreamer->Generate());
    }
@@ -2691,12 +2693,21 @@ TClassStreamer *TClass::GetStreamer() const
    }
    return fStreamer;
 }
+
 //______________________________________________________________________________
 ClassStreamerFunc_t TClass::GetStreamerFunc() const
 {
    // Get a wrapper/accessor function around this class custom streamer (member function).
 
    return fStreamerFunc;
+}
+
+//______________________________________________________________________________
+ClassConvStreamerFunc_t TClass::GetConvStreamerFunc() const
+{
+   // Get a wrapper/accessor function around this class custom conversion streamer (member function).
+
+   return fConvStreamerFunc;
 }
 
 //______________________________________________________________________________
@@ -2861,7 +2872,8 @@ TClass *TClass::GetClass(const char *name, Bool_t load, Bool_t silent)
    if (gDebug>0){
       printf("TClass::GetClass: Header Parsing - The representation of %s was not found in the type system. A lookup in the interpreter is about to be tried: this can cause parsing. This can be avoided selecting %s in the linkdef/selection file.\n",normalizedName.c_str(), normalizedName.c_str());
    }
-   if (gInterpreter->CheckClassInfo(normalizedName.c_str(), kTRUE /* autoload */, kTRUE /*Only class, structs and ns*/)) {
+   if (normalizedName.length() &&
+       gInterpreter->CheckClassInfo(normalizedName.c_str(), kTRUE /* autoload */, kTRUE /*Only class, structs and ns*/)) {
       // Get the normalized name based on the decl (currently the only way
       // to get the part to add or drop the default arguments as requested by the user)
       std::string alternative;
@@ -3321,12 +3333,50 @@ TList *TClass::GetListOfBases()
 TList *TClass::GetListOfEnums(Bool_t load /* = kTRUE */)
 {
    // Return list containing the TEnums of a class.
+   auto temp = fEnums.load();
+   if (temp) {
+      if (load) {
+         if (fProperty == -1) Property();
+         if (! ((kIsClass | kIsStruct | kIsUnion) & fProperty) ) {
+            R__LOCKGUARD2(gROOTMutex);
+            temp->Load();
+         }
+      }
+      return temp;
+   }
+
+   if (!load) {
+      if (fProperty == -1) Property();
+      if (! ((kIsClass | kIsStruct | kIsUnion) & fProperty) ) {
+         R__LOCKGUARD(gInterpreterMutex);
+         if (fEnums) {
+            return fEnums.load();
+         }
+         //namespaces can have enums added to them
+         fEnums = new TListOfEnumsWithLock(this);
+         return fEnums;
+      }
+      // no one is supposed to modify the returned results
+      static TListOfEnums s_list;
+      return &s_list;
+   }
 
    R__LOCKGUARD(gInterpreterMutex);
-
-   if (!fEnums) fEnums = new TListOfEnums(this);
-   if (load) fEnums->Load();
-   return fEnums;
+   if (fEnums) {
+      if (load) (*fEnums).Load();
+      return fEnums.load();
+   }
+   if (fProperty == -1) Property();
+   if ( (kIsClass | kIsStruct | kIsUnion) & fProperty) {
+      // For this case, the list will be immutable
+      temp = new TListOfEnums(this);
+   } else {
+      //namespaces can have enums added to them
+      temp = new TListOfEnumsWithLock(this);
+   }
+   temp->Load();
+   fEnums = temp;
+   return temp;
 }
 
 //______________________________________________________________________________
@@ -3749,7 +3799,7 @@ void TClass::ResetCaches()
    if (fData)
       fData->Unload();
    if (fEnums)
-      fEnums->Unload();
+      (*fEnums).Unload();
    if (fMethod)
       (*fMethod).Unload();
 
@@ -4492,7 +4542,6 @@ void *TClass::New(ENewType defConstructor, Bool_t quiet) const
       // constructor we can call.
       // [This is very unlikely to work, but who knows!]
       TClass__GetCallingNew() = defConstructor;
-      R__LOCKGUARD2(gInterpreterMutex);
       p = gCling->ClassInfo_New(GetClassInfo());
       TClass__GetCallingNew() = kRealNew;
       if (!p && !quiet) {
@@ -4587,7 +4636,6 @@ void *TClass::New(void *arena, ENewType defConstructor) const
       // constructor we can call.
       // [This is very unlikely to work, but who knows!]
       TClass__GetCallingNew() = defConstructor;
-      R__LOCKGUARD2(gInterpreterMutex);
       p = gCling->ClassInfo_New(GetClassInfo(),arena);
       TClass__GetCallingNew() = kRealNew;
       if (!p) {
@@ -4675,7 +4723,6 @@ void *TClass::NewArray(Long_t nElements, ENewType defConstructor) const
       // constructor we can call.
       // [This is very unlikely to work, but who knows!]
       TClass__GetCallingNew() = defConstructor;
-      R__LOCKGUARD2(gInterpreterMutex);
       p = gCling->ClassInfo_New(GetClassInfo(),nElements);
       TClass__GetCallingNew() = kRealNew;
       if (!p) {
@@ -4762,7 +4809,6 @@ void *TClass::NewArray(Long_t nElements, void *arena, ENewType defConstructor) c
       // constructor that way, or no default constructor is available and
       // we fail.
       TClass__GetCallingNew() = defConstructor;
-      R__LOCKGUARD2(gInterpreterMutex);
       p = gCling->ClassInfo_New(GetClassInfo(),nElements, arena);
       TClass__GetCallingNew() = kRealNew;
       if (!p) {
@@ -4850,10 +4896,8 @@ void TClass::Destructor(void *obj, Bool_t dtorOnly)
       // or it will be interpreted, otherwise we fail
       // because there is no destructor code at all.
       if (dtorOnly) {
-         R__LOCKGUARD2(gInterpreterMutex);
          gCling->ClassInfo_Destruct(fClassInfo,p);
       } else {
-         R__LOCKGUARD2(gInterpreterMutex);
          gCling->ClassInfo_Delete(fClassInfo,p);
       }
    } else if (!HasInterpreterInfo() && fCollectionProxy) {
@@ -4969,7 +5013,6 @@ void TClass::DeleteArray(void *ary, Bool_t dtorOnly)
       // call the array delete operator, hopefully
       // the class library is loaded and there will be
       // a destructor we can call.
-      R__LOCKGUARD2(gInterpreterMutex);
       gCling->ClassInfo_DeleteArray(GetClassInfo(),ary, dtorOnly);
    } else if (!HasInterpreterInfo() && fCollectionProxy) {
       // There is no dictionary at all, so this is an emulated
@@ -5467,7 +5510,10 @@ Long_t TClass::Property() const
          kl->fStreamerImpl  = &TClass::StreamerStreamerInfo;
 
       } else if ( kl->fStreamerType == TClass::kDefault ) {
-         if (kl->fStreamerFunc) {
+         if (kl->fConvStreamerFunc) {
+            kl->fStreamerType  = kInstrumented;
+            kl->fStreamerImpl  = &TClass::ConvStreamerInstrumented;
+         } else if (kl->fStreamerFunc) {
             kl->fStreamerType  = kInstrumented;
             kl->fStreamerImpl  = &TClass::StreamerInstrumented;
          } else {
@@ -5515,8 +5561,9 @@ void TClass::SetStreamerImpl()
       case kForeign:  fStreamerImpl  = &TClass::StreamerStreamerInfo; break;
       case kExternal: fStreamerImpl  = &TClass::StreamerExternal; break;
       case kInstrumented:  {
-         if (fStreamerFunc) fStreamerImpl  = &TClass::StreamerInstrumented;
-         else               fStreamerImpl  = &TClass::StreamerStreamerInfo;
+         if (fConvStreamerFunc)  fStreamerImpl  = &TClass::ConvStreamerInstrumented;
+         else if (fStreamerFunc) fStreamerImpl  = &TClass::StreamerInstrumented;
+         else                    fStreamerImpl  = &TClass::StreamerStreamerInfo;
          break;
       }
 
@@ -5638,7 +5685,7 @@ void TClass::SetUnloaded()
       fData->Unload();
    }
    if (fEnums) {
-      fEnums->Unload();
+      (*fEnums).Unload();
    }
 
    if (fState <= kForwardDeclared && fStreamerInfo->GetEntries() != 0) {
@@ -6049,64 +6096,73 @@ Int_t TClass::WriteBuffer(TBuffer &b, void *pointer, const char * /*info*/)
 }
 
 //______________________________________________________________________________
-void TClass::StreamerExternal(void *object, TBuffer &b, const TClass *onfile_class) const
+void TClass::StreamerExternal(const TClass* pThis, void *object, TBuffer &b, const TClass *onfile_class)
 {
    //There is special streamer for the class
 
    //      case kExternal:
    //      case kExternal|kEmulatedStreamer:
 
-   TClassStreamer *streamer = gThreadTsd ? GetStreamer() : fStreamer;
+   TClassStreamer *streamer = gThreadTsd ? pThis->GetStreamer() : pThis->fStreamer;
    streamer->Stream(b,object,onfile_class);
 }
 
 //______________________________________________________________________________
-void TClass::StreamerTObject(void *object, TBuffer &b, const TClass * /* onfile_class */) const
+void TClass::StreamerTObject(const TClass* pThis, void *object, TBuffer &b, const TClass * /* onfile_class */)
 {
    // Case of TObjects
 
    // case kTObject:
 
-   if (!fIsOffsetStreamerSet) {
-      CalculateStreamerOffset();
+   if (!pThis->fIsOffsetStreamerSet) {
+      pThis->CalculateStreamerOffset();
    }
-   TObject *tobj = (TObject*)((Long_t)object + fOffsetStreamer);
+   TObject *tobj = (TObject*)((Long_t)object + pThis->fOffsetStreamer);
    tobj->Streamer(b);
 }
 
 //______________________________________________________________________________
-void TClass::StreamerTObjectInitialized(void *object, TBuffer &b, const TClass * /* onfile_class */) const
+void TClass::StreamerTObjectInitialized(const TClass* pThis, void *object, TBuffer &b, const TClass * /* onfile_class */)
 {
    // Case of TObjects when fIsOffsetStreamerSet is known to have been set.
 
-   TObject *tobj = (TObject*)((Long_t)object + fOffsetStreamer);
+   TObject *tobj = (TObject*)((Long_t)object + pThis->fOffsetStreamer);
    tobj->Streamer(b);
 }
 
 //______________________________________________________________________________
-void TClass::StreamerTObjectEmulated(void *object, TBuffer &b, const TClass *onfile_class) const
+void TClass::StreamerTObjectEmulated(const TClass* pThis, void *object, TBuffer &b, const TClass *onfile_class)
 {
    // Case of TObjects when we do not have the library defining the class.
 
    // case kTObject|kEmulatedStreamer :
    if (b.IsReading()) {
-      b.ReadClassEmulated(this, object, onfile_class);
+      b.ReadClassEmulated(pThis, object, onfile_class);
    } else {
-      b.WriteClassBuffer(this, object);
+      b.WriteClassBuffer(pThis, object);
    }
 }
 
 //______________________________________________________________________________
-void TClass::StreamerInstrumented(void *object, TBuffer &b, const TClass * /* onfile_class */) const
+void TClass::StreamerInstrumented(const TClass* pThis, void *object, TBuffer &b, const TClass * /* onfile_class */)
 {
    // Case of instrumented class with a library
 
    // case kInstrumented:
-   fStreamerFunc(b,object);
+   pThis->fStreamerFunc(b,object);
 }
 
 //______________________________________________________________________________
-void TClass::StreamerStreamerInfo(void *object, TBuffer &b, const TClass *onfile_class) const
+void TClass::ConvStreamerInstrumented(const TClass* pThis, void *object, TBuffer &b, const TClass *onfile_class)
+{
+   // Case of instrumented class with a library
+
+   // case kInstrumented:
+   pThis->fConvStreamerFunc(b,object,onfile_class);
+}
+
+//______________________________________________________________________________
+void TClass::StreamerStreamerInfo(const TClass* pThis, void *object, TBuffer &b, const TClass *onfile_class)
 {
    // Case of where we should directly use the StreamerInfo.
    //    case kForeign:
@@ -6115,29 +6171,32 @@ void TClass::StreamerStreamerInfo(void *object, TBuffer &b, const TClass *onfile
    //    case kEmulatedStreamer:
 
    if (b.IsReading()) {
-      b.ReadClassBuffer(this, object, onfile_class);
+      b.ReadClassBuffer(pThis, object, onfile_class);
       //ReadBuffer (b, object);
    } else {
       //WriteBuffer(b, object);
-      b.WriteClassBuffer(this, object);
+      b.WriteClassBuffer(pThis, object);
    }
 }
 
 //______________________________________________________________________________
-void TClass::StreamerDefault(void *object, TBuffer &b, const TClass *onfile_class) const
+void TClass::StreamerDefault(const TClass* pThis, void *object, TBuffer &b, const TClass *onfile_class)
 {
    // Default streaming in cases where either we have no way to know what to do
    // or if Property() has not yet been called.
 
-   if (fProperty==(-1)) {
-      Property();
-      if (fStreamerImpl == &TClass::StreamerDefault) {
-         Fatal("StreamerDefault", "fStreamerImpl not properly initialized (%d)", fStreamerType);
-      } else {
-         (this->*fStreamerImpl)(object,b,onfile_class);
-      }
+   if (pThis->fProperty==(-1)) {
+      pThis->Property();
+   }
+
+   // We could get here because after this thread started StreamerDefault
+   // *and* before check fProperty, another thread might have call Property
+   // and this fProperty when we read it, is not -1 and fStreamerImpl is
+   // supposed to be set properly (no longer pointing to the default).
+   if (pThis->fStreamerImpl == &TClass::StreamerDefault) {
+      pThis->Fatal("StreamerDefault", "fStreamerImpl not properly initialized (%d)", pThis->fStreamerType);
    } else {
-      Fatal("StreamerDefault", "fStreamerType not properly initialized (%d)", fStreamerType);
+      (*pThis->fStreamerImpl)(pThis,object,b,onfile_class);
    }
 }
 
@@ -6175,7 +6234,8 @@ void TClass::SetStreamerFunc(ClassStreamerFunc_t strm)
 {
    // Set a wrapper/accessor function around this class custom streamer.
 
-   if (fProperty != -1 &&
+   R__LOCKGUARD(gInterpreterMutex);
+   if (fProperty != -1 && !fConvStreamerFunc &&
        ( (fStreamerFunc == 0 && strm != 0) || (fStreamerFunc != 0 && strm == 0) ) )
    {
       fStreamerFunc = strm;
@@ -6191,6 +6251,30 @@ void TClass::SetStreamerFunc(ClassStreamerFunc_t strm)
    }
    fCanSplit = -1;
 }
+
+//______________________________________________________________________________
+void TClass::SetConvStreamerFunc(ClassConvStreamerFunc_t strm)
+{
+   // Set a wrapper/accessor function around this class custom conversion streamer.
+
+   R__LOCKGUARD(gInterpreterMutex);
+   if (fProperty != -1 &&
+       ( (fConvStreamerFunc == 0 && strm != 0) || (fConvStreamerFunc != 0 && strm == 0) ) )
+   {
+      fConvStreamerFunc = strm;
+
+      // Since initialization has already been done, make sure to tweak it
+      // for the new state.
+      if (HasInterpreterInfo() && fStreamerType != kTObject && !fStreamer) {
+         fStreamerType  = kInstrumented;
+         fStreamerImpl  = &TClass::ConvStreamerInstrumented;
+      }
+   } else {
+      fConvStreamerFunc = strm;
+   }
+   fCanSplit = -1;
+}
+
 
 //______________________________________________________________________________
 void TClass::SetMerge(ROOT::MergeFunc_t newMerge)

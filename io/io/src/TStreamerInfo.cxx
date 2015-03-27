@@ -1684,7 +1684,6 @@ void TStreamerInfo::BuildOld()
       };
 
       element->SetNewType(element->GetType());
-      element->Init();
       if (element->IsBase()) {
          //---------------------------------------------------------------------
          // Dealing with nonSTL bases
@@ -1743,6 +1742,32 @@ void TStreamerInfo::BuildOld()
             // '@@emulated' in the case of the emulation of an abstract base class.
             Int_t baseOffset = fClass->GetBaseClassOffset(baseclass);
 
+            // Deal with potential schema evolution (renaming) of the base class.
+            if (baseOffset < 0) {
+
+               // See if this base element can be converted into one of
+               // the existing base class.
+               TList* listOfBases = fClass->GetListOfBases();
+               if (listOfBases) {
+                  TBaseClass* bc = 0;
+                  TIter nextBC(fClass->GetListOfBases());
+                  while ((bc = (TBaseClass*) nextBC())) {
+                     TClass *in_memory_bcl = bc->GetClassPointer();
+                     if (in_memory_bcl && in_memory_bcl->GetSchemaRules()) {
+                        auto baserule = in_memory_bcl->GetSchemaRules()->FindRules( base->GetName(), base->GetBaseVersion(), base->GetBaseCheckSum() );
+                        if (baserule) {
+                           base->SetNewBaseClass(in_memory_bcl);
+                           baseOffset = bc->GetDelta();
+
+                        }
+                     }
+                  }
+               }
+            }
+            // We need to initialize the element now, as we need the
+            // correct StraemerInfo next.
+            element->Init(this);
+
             // Force the StreamerInfo "Compilation" of the base classes first. This is necessary in
             // case the base class contains a member used as an array dimension in the derived classes.
             TStreamerInfo* infobase;
@@ -1778,10 +1803,14 @@ void TStreamerInfo::BuildOld()
                }
                fNVirtualInfoLoc += infobase->fNVirtualInfoLoc;
             }
-            // FIXME: Presumably we're in emulated mode, but it still does not make any sense
-            // shouldn't it be element->SetNewType(-1) ?
-            if (baseOffset < 0) {
-               baseOffset = 0;
+
+
+            {
+               if (baseOffset < 0) {
+                  // FIXME: Presumably we're in emulated mode, but it still does not make any sense
+                  // shouldn't it be element->SetNewType(-1) ?
+                  baseOffset = 0;
+               }
             }
             element->SetOffset(baseOffset);
             offset += baseclass->Size();
@@ -1868,6 +1897,7 @@ void TStreamerInfo::BuildOld()
             }
             element->SetOffset(baseOffset);
             offset += asize;
+            element->Init(this);
             continue;
          }
       }
@@ -4816,7 +4846,7 @@ void TStreamerInfo::PrintValue(const char *name, char *pointer, Int_t i, Int_t l
          if (pointer==0) {
             printf("NULL\n");
          } else {
-            static TClassRef stringClass("string");
+            const static TClassRef stringClass("string");
             if (fClass == stringClass) {
                std::string *st = (std::string*)(pointer);
                printf("%s\n",st->c_str());
@@ -4978,10 +5008,12 @@ void TStreamerInfo::TagFile(TFile *file)
    // the overloads of TBuffer::TagStreamerInfo.
 
    if (file) {
-      static Bool_t onlyonce = kFALSE;
-      if (!onlyonce) {
+      // If the value of the atomic is kFALSE (equal to expected), change its value
+      // to kTRUE and return true. Leave it as it is otherwise and return false.
+      static std::atomic<Bool_t> onlyonce(kFALSE);
+      Bool_t expected = kFALSE;
+      if (onlyonce.compare_exchange_strong(expected,kTRUE)) {
          Warning("TagFile","This function is deprecated, use TBuffer::TagStreamerInfo instead");
-         onlyonce = kTRUE;
       }
       TArrayC *cindex = file->GetClassIndex();
       Int_t nindex = cindex->GetSize();

@@ -177,25 +177,6 @@ void TListOfEnums::Delete(Option_t *option /* ="" */)
 }
 
 //______________________________________________________________________________
-TObject *TListOfEnums::FindObject(const char *name) const
-{
-   // Specialize FindObject to do search for the
-   // a enum just by name or create it if its not already in the list
-
-   TObject *result = THashList::FindObject(name);
-   if (!result) {
-
-      R__LOCKGUARD(gInterpreterMutex);
-
-      TInterpreter::DeclId_t decl;
-      if (fClass) decl = gInterpreter->GetEnum(fClass, name);
-      else        decl = gInterpreter->GetEnum(0, name);
-      if (decl) result = const_cast<TListOfEnums *>(this)->Get(decl, name);
-   }
-   return result;
-}
-
-//______________________________________________________________________________
 TEnum *TListOfEnums::Get(DeclId_t id, const char *name)
 {
    // Return (after creating it if necessary) the TEnum
@@ -259,6 +240,15 @@ TEnum *TListOfEnums::Get(DeclId_t id, const char *name)
    }
 
    return e;
+}
+
+//______________________________________________________________________________
+TEnum *TListOfEnums::GetObject(const char *name) const
+{
+   // Return an object from the list of enums *if and only if* is has already
+   // been loaded in the list.  This is an internal routine.
+
+   return (TEnum*)THashList::FindObject(name);
 }
 
 //______________________________________________________________________________
@@ -375,7 +365,7 @@ void TListOfEnums::Load()
    // We cannot clear the whole unloaded list. It is too much.
 //   fUnloaded->Clear();
 
-   gInterpreter->LoadEnums(fClass);
+   gInterpreter->LoadEnums(*this);
 }
 
 //______________________________________________________________________________

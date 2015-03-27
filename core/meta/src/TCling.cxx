@@ -66,6 +66,7 @@
 #include "TVirtualStreamerInfo.h"
 #include "TListOfDataMembers.h"
 #include "TListOfEnums.h"
+#include "TListOfEnumsWithLock.h"
 #include "TListOfFunctions.h"
 #include "TListOfFunctionTemplates.h"
 #include "TProtoClass.h"
@@ -174,7 +175,7 @@ extern "C" {
 #define dlopen(library_name, flags) ::LoadLibraryEx(library_name, NULL, DONT_RESOLVE_DLL_REFERENCES)
 #define dlclose(library) ::FreeLibrary((HMODULE)library)
 char *dlerror() {
-   static char Msg[1000];
+   thread_local char Msg[1000];
    FormatMessage(FORMAT_MESSAGE_FROM_SYSTEM, NULL, GetLastError(),
                  MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), Msg,
                  sizeof(Msg), NULL);
@@ -893,14 +894,13 @@ bool TClingLookupHelper__ExistingTypeCheck(const std::string &tname,
    }
 
    // Check if the name is an enumerator
-   const auto lastPos = strrchr(inner, ':');
-   if (lastPos != nullptr)   // Main switch: case 1 - scoped enum, case 2 global enum
+   const auto lastPos = TClassEdit::GetUnqualifiedName(inner);
+   if (lastPos != inner)   // Main switch: case 1 - scoped enum, case 2 global enum
    {
       // We have a scope
-      // All of this C gymnastic is here to get the scope name and to avoid
-      // allocations on the heap
-      const auto enName = lastPos + 1;
-      const auto scopeNameSize = ((Long64_t)lastPos - (Long64_t)inner) / sizeof(decltype(*lastPos)) - 1;
+      // All of this C gymnastic is to avoid allocations on the heap
+      const auto enName = lastPos;
+      const auto scopeNameSize = ((Long64_t)lastPos - (Long64_t)inner) / sizeof(decltype(*lastPos)) - 2;
       char scopeName[scopeNameSize + 1]; // on the stack, +1 for the terminating character '\0'
       strncpy(scopeName, inner, scopeNameSize);
       scopeName[scopeNameSize] = '\0';
@@ -1150,7 +1150,7 @@ static const char *FindLibraryName(void (*func)())
    }
 
    HMODULE hMod = (HMODULE) mbi.AllocationBase;
-   static char moduleName[MAX_PATH];
+   thread_local char moduleName[MAX_PATH];
 
    if (!GetModuleFileNameA (hMod, moduleName, sizeof (moduleName)))
    {
@@ -1213,7 +1213,7 @@ bool TCling::LoadPCM(TString pcmFileName,
       }
 
       TDirectory::TContext ctxt(0);
-      
+
       TFile *pcmFile = new TFile(pcmFileName+"?filetype=pcm","READ");
 
       auto listOfKeys = pcmFile->GetListOfKeys();
@@ -1226,9 +1226,9 @@ bool TCling::LoadPCM(TString pcmFileName,
       }
 
       TObjArray *protoClasses;
-      if (gDebug > 1) 
+      if (gDebug > 1)
             ::Info("TCling::LoadPCM","reading protoclasses for %s \n",pcmFileName.Data());
-      
+
       pcmFile->GetObject("__ProtoClasses", protoClasses);
 
       if (protoClasses) {
@@ -1306,7 +1306,17 @@ bool TCling::LoadPCM(TString pcmFileName,
                if (!nsTClassEntry){
                   nsTClassEntry = new TClass(enumScope,0,TClass::kNamespaceForMeta, true);
                }
-               auto listOfEnums = dynamic_cast<THashList*>(nsTClassEntry->GetListOfEnums(false));
+               auto listOfEnums = nsTClassEntry->fEnums.load();
+               if (!listOfEnums) {
+                  if ( (kIsClass | kIsStruct | kIsUnion) & nsTClassEntry->Property() ) {
+                     // For this case, the list will be immutable once constructed
+                     // (i.e. in this case, by the end of this routine).
+                     listOfEnums = nsTClassEntry->fEnums = new TListOfEnums(nsTClassEntry);
+                  } else {
+                     //namespaces can have enums added to them
+                     listOfEnums = nsTClassEntry->fEnums = new TListOfEnumsWithLock(nsTClassEntry);
+                  }
+               }
                if (listOfEnums && !listOfEnums->THashList::FindObject(enumName)){
                   ((TEnum*) selEnum)->SetClass(nsTClassEntry);
                   listOfEnums->Add(selEnum);
@@ -1380,7 +1390,7 @@ void TCling::RegisterModule(const char* modulename,
    // The value of 'triggerFunc' is used to find the shared library location.
 
    // rootcling also uses TCling for generating the dictionary ROOT files.
-   static bool fromRootCling = dlsym(RTLD_DEFAULT, "usedToIdentifyRootClingByDlSym");
+   static const bool fromRootCling = dlsym(RTLD_DEFAULT, "usedToIdentifyRootClingByDlSym");
    // We need the dictionary initialization but we don't want to inject the
    // declarations into the interpreter, except for those we really need for
    // I/O; see rootcling.cxx after the call to TCling__GetInterpreter().
@@ -1937,13 +1947,51 @@ void TCling::InspectMembers(TMemberInspector& insp, const void* obj,
       return;
    }
 
-   static TClassRef clRefString("std::string");
+   static const TClassRef clRefString("std::string");
    if (clRefString == cl) {
       // We stream std::string without going through members..
       return;
    }
 
    const char* cobj = (const char*) obj; // for ptr arithmetics
+
+   // Treat the case of std::complex in a special manner. We want to enforce
+   // the layout of a stl implementation independent class, which is the
+   // complex as implmented in ROOT5.
+
+   // A simple lambda to simplify the code
+   auto inspInspect =  [&] (ptrdiff_t offset){
+      insp.Inspect(const_cast<TClass*>(cl), insp.GetParent(), "_real", cobj, isTransient);
+      insp.Inspect(const_cast<TClass*>(cl), insp.GetParent(), "_imag", cobj + offset, isTransient);
+   };
+
+   auto complexType = TClassEdit::GetComplexType(cl->GetName());
+   switch(complexType) {
+      case TClassEdit::EComplexType::kNone:
+      {
+        break;
+      }
+      case TClassEdit::EComplexType::kFloat:
+      {
+        inspInspect(sizeof(float));
+        return;
+      }
+      case TClassEdit::EComplexType::kDouble:
+      {
+        inspInspect(sizeof(double));
+        return;
+      }
+      case TClassEdit::EComplexType::kInt:
+      {
+        inspInspect(sizeof(int));
+        return;
+      }
+      case TClassEdit::EComplexType::kLong:
+      {
+        inspInspect(sizeof(long));
+        return;
+      }
+   }
 
    static clang::PrintingPolicy
       printPol(fInterpreter->getCI()->getLangOpts());
@@ -2255,6 +2303,8 @@ bool TCling::Declare(const char* code)
    // subsequent execution, no automatic provision of declarations but just a
    // plain #include.
    // Returns true on success, false on failure.
+
+   R__LOCKGUARD(gInterpreterMutex);
 
    int oldload = SetClassAutoloading(0);
    SuspendAutoParsing autoParseRaii(this);
@@ -3167,20 +3217,18 @@ void TCling::CreateListOfBaseClasses(TClass *cl) const
 }
 
 //______________________________________________________________________________
-void TCling::LoadEnums(TClass* cl) const
+void TCling::LoadEnums(TListOfEnums& enumList) const
 {
    // Create list of pointers to enums for TClass cl.
    R__LOCKGUARD2(gInterpreterMutex);
 
    const Decl * D;
-   TListOfEnums* enumList;
+   TClass* cl = enumList.GetClass();
    if (cl) {
       D = ((TClingClassInfo*)cl->GetClassInfo())->GetDecl();
-      enumList = (TListOfEnums*)cl->GetListOfEnums(false);
    }
    else {
       D = fInterpreter->getCI()->getASTContext().getTranslationUnitDecl();
-      enumList = (TListOfEnums*)gROOT->GetListOfEnums();
    }
    // Iterate on the decl of the class and get the enums.
    if (const clang::DeclContext* DC = dyn_cast<clang::DeclContext>(D)) {
@@ -3204,7 +3252,7 @@ void TCling::LoadEnums(TClass* cl) const
                if (!buf.empty()) {
                   const char* name = buf.c_str();
                   // Add the enum to the list of loaded enums.
-                  enumList->Get(ED, name);
+                  enumList.Get(ED, name);
                }
             }
          }
@@ -4089,10 +4137,9 @@ void TCling::ExecuteWithArgsAndReturn(TMethod* method, void* address,
       Error("ExecuteWithArgsAndReturn", "No method was defined");
       return;
    }
-   R__LOCKGUARD2(gInterpreterMutex);
-   TClingCallFunc func(fInterpreter,*fNormalizedCtxt);
+
    TClingMethodInfo* minfo = (TClingMethodInfo*) method->fInfo;
-   func.Init(minfo);
+   TClingCallFunc func(*minfo,*fNormalizedCtxt);
    func.ExecWithArgsAndReturn(address, args, nargs, ret);
 }
 
@@ -4973,6 +5020,8 @@ Int_t TCling::AutoParse(const char *cls)
    // Parse the headers relative to the class
    // Returns 1 in case of success, 0 in case of failure
 
+   R__LOCKGUARD(gInterpreterMutex);
+
    if (!fHeaderParsingOnDemand || fIsAutoParsingSuspended) {
       if (fClingCallbacks->IsAutoloadingEnabled()) {
          return AutoLoad(cls);
@@ -5839,7 +5888,7 @@ Bool_t TCling::LoadText(const char* text) const
 const char* TCling::MapCppName(const char* name) const
 {
    // Interface to cling function
-   static std::string buffer;
+   thread_local std::string buffer;
    ROOT::TMetaUtils::GetCppName(buffer,name);
    return buffer.c_str();
 }
@@ -5971,6 +6020,7 @@ void TCling::RegisterTemporary(const cling::Value& value)
    // value; only pointers / references / objects need to be stored.
 
    if (value.isValid() && value.needsManagedAllocation()) {
+      R__LOCKGUARD(gInterpreterMutex);
       fTemporaries->push_back(value);
    }
 }
@@ -6521,7 +6571,7 @@ const char* TCling::ClassInfo_FileName(ClassInfo_t* cinfo) const
 const char* TCling::ClassInfo_FullName(ClassInfo_t* cinfo) const
 {
    TClingClassInfo* TClinginfo = (TClingClassInfo*) cinfo;
-   static std::string output;
+   thread_local std::string output;
    TClinginfo->FullName(output,*fNormalizedCtxt);
    return output.c_str();
 }
@@ -6636,7 +6686,7 @@ Long_t TCling::BaseClassInfo_Tagnum(BaseClassInfo_t* bcinfo) const
 const char* TCling::BaseClassInfo_FullName(BaseClassInfo_t* bcinfo) const
 {
    TClingBaseClassInfo* TClinginfo = (TClingBaseClassInfo*) bcinfo;
-   static std::string output;
+   thread_local std::string output;
    TClinginfo->FullName(output,*fNormalizedCtxt);
    return output.c_str();
 }
@@ -7114,7 +7164,7 @@ TypeInfo_t* TCling::MethodInfo_Type(MethodInfo_t* minfo) const
 const char* TCling::MethodInfo_GetMangledName(MethodInfo_t* minfo) const
 {
    TClingMethodInfo* info = (TClingMethodInfo*) minfo;
-   static TString mangled_name;
+   thread_local  TString mangled_name;
    mangled_name = info->GetMangledName();
    return mangled_name;
 }

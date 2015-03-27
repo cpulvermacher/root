@@ -87,6 +87,26 @@ static void RemoveStd(std::string &name, size_t pos = 0)
    }
 }
 
+//______________________________________________________________________________
+TClassEdit::EComplexType TClassEdit::GetComplexType(const char* clName)
+{
+   if (0 == strncmp(clName, "complex<", 8)) {
+      const char *clNamePlus8 = clName + 8;
+      if (0 == strcmp("float>", clNamePlus8)) {
+         return EComplexType::kFloat;
+         }
+      if (0 == strcmp("double>", clNamePlus8)) {
+         return EComplexType::kDouble;
+      }
+      if (0 == strcmp("int>", clNamePlus8)) {
+         return EComplexType::kInt;
+      }
+      if (0 == strcmp("long>", clNamePlus8)) {
+         return EComplexType::kLong;
+      }
+   }
+   return EComplexType::kNone;
+}
 
 //______________________________________________________________________________
 void TClassEdit::Init(TClassEdit::TInterpreterLookupHelper *helper)
@@ -733,6 +753,27 @@ string TClassEdit::GetLong64_Name(const string& original)
       result.replace(pos, longlong_len, "Long64_t");
    }
    return result;
+}
+
+//______________________________________________________________________________
+const char *TClassEdit::GetUnqualifiedName(const char *original)
+{
+   // Return the start of the unqualified name include in 'original'.
+
+   const char *lastPos = original;
+   {
+      long depth = 0;
+      for(auto cursor = original; *cursor != '\0'; ++cursor) {
+         if ( *cursor == '<') ++depth;
+         else if ( *cursor == '>') --depth;
+         else if ( *cursor == ':' ) {
+            if (depth==0 && *(cursor+1) == ':' && *(cursor+2) != '\0') {
+               lastPos = cursor+2;
+            }
+         }
+      }
+   }
+   return lastPos;
 }
 
 //______________________________________________________________________________
